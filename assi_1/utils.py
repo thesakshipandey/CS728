@@ -1,5 +1,6 @@
 # not a task specific file.
 import json
+import numpy as np
 
 def read_json(file_path):
     with open(file_path, 'r') as f:
@@ -26,3 +27,20 @@ def get_token_ids() -> dict[str, int]:
         token_ids = json.load(f)
 
     return token_ids
+
+def cosine_similarity(vec1, vec2):
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2) + 1e-10)
+
+def get_top_k_similar_words(word, word_embeddings, token_ids, k=5):
+    target_vec = word_embeddings[token_ids[word]]
+    similarities = []
+
+    for other_word in word_embeddings.keys():
+        if other_word == token_ids[word]:
+            continue  # skip the word itself
+        sim = cosine_similarity(target_vec, word_embeddings[other_word])
+        similarities.append((other_word, sim))
+
+    # Sort by similarity descending
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    return similarities[:k]

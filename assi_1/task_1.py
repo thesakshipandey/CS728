@@ -77,12 +77,13 @@ for w in w_s:
         loss_per_epoch = []
         latency_per_epoch = []
 
+        print(f"Training started for context window = {w} and dimension = {d}...")
         while epochs < 50:
             t0 = time.time() # for the latency calculation...
             epoch_loss = 0.0 # for monitoring the epoch loss...
             for (word1, word2) in co_occurence_matrix.keys():
                 if co_occurence_matrix[(word1, word2)] > 0:
-                    damping_function_value = damping_function(co_occurence_matrix[(word1, word2)], x_max)
+                    damping_function_value = damping_function(co_occurence_matrix[(word1, word2)], x_max, alpha)
 
                     common_grad_term = 2 * damping_function_value * (np.dot(U[token_ids[word1], :], V[token_ids[word2], :]) + b[token_ids[word1]] + b_[token_ids[word2]] - np.log(co_occurence_matrix[(word1, word2)]))
                     grad_wrt_u = common_grad_term * V[token_ids[word2], :]
@@ -115,7 +116,7 @@ for w in w_s:
         plt.ylabel("Total Loss")
         plt.title(f"GloVe Training Loss per Epoch for context window = {w} and dimension = {d}")
         plt.grid(True)
-        plt.savefig(f"glove_training_loss_context_window_{w}_dimension_{d}.png", dpi=300, bbox_inches='tight')
+        plt.savefig(f"task_1_images/glove_training_loss_context_window_{w}_dimension_{d}.png", dpi=300, bbox_inches='tight')
         plt.close()
 
         plt.figure(figsize=(8,5))
@@ -124,7 +125,7 @@ for w in w_s:
         plt.ylabel("Time (s)")
         plt.title(f"Epoch Latency for context window = {w} and dimension = {d}")
         plt.grid(True)
-        plt.savefig(f"epoch_latency_context_window_{w}_dimension_{d}.png", dpi=300, bbox_inches='tight')
+        plt.savefig(f"task_1_images/epoch_latency_context_window_{w}_dimension_{d}.png", dpi=300, bbox_inches='tight')
         plt.close()
         
         for key in token_ids.keys():
@@ -132,4 +133,4 @@ for w in w_s:
             final_word_embeddings[token_ids[key]] = U[token_ids[key], :] + V[token_ids[key], :]
 
         # storing this in a pickle file...
-        np.save(f"/content/drive/MyDrive/cs_728/context_window_{w}_dimension_{d}_final_word_embeddings.npy", final_word_embeddings, allow_pickle=True)
+        np.save(f"embeddings/context_window_{w}_dimension_{d}_final_word_embeddings.npy", final_word_embeddings, allow_pickle=True)
