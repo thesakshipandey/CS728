@@ -16,14 +16,17 @@ cols = []   # document indices
 vals = []   # counts
 doc_lenghts = []
 
-clubbed = False
+
 top_k = 100
+task2 = False  # if true then task 5 otherwise task 2
 
 word2ind = {}
 
 docId2ind = {}
 
 words_encountered = {}
+
+clubbed = False  # Don't change for assignment task 2 -> Assignment terms changed
 
 for word in data.keys():
     passages = data[word]
@@ -63,20 +66,18 @@ assert(rows[-1] == len(word_list) - 1)
 term_doc = coo_matrix((vals, (rows, cols)), shape=(m, n))
 
 # %%
-tf = term_doc/np.array(doc_lenghts)
-
-# %%
-eidf = len(doc_lenghts)/term_doc.getnnz(axis=1)
-idf = np.log(eidf)
-
-# %%
-tf_idf = tf.multiply(idf.reshape(-1,1))
+if task2:
+    tf_idf = term_doc
+else:
+    tf = term_doc/np.array(doc_lenghts)
+    eidf = len(doc_lenghts)/term_doc.getnnz(axis=1)
+    idf = np.log(eidf)
+    tf_idf = tf.multiply(idf.reshape(-1,1))
 
 # %%
 U_k, S_k, Vt_k = svds(tf_idf, k=top_k)
 idx = np.argsort(S_k)[::-1] #top-k are returned in reverse order
 U_k, S_k, Vt_k = U_k[:, idx], S_k[idx], Vt_k[idx]
-
 
 term_proj = U_k@np.diag(S_k)  #taking projection in lower-space
 term_proj /= np.linalg.norm(term_proj, axis=1, keepdims=True)  #normalizing for cosine similarity
@@ -86,7 +87,7 @@ word_embeddings = {
     for i, word in enumerate(word_list)
 }
 
-with open(f"term_embeddings_svd_{'clubbed' if clubbed else 'non-clubbed'}_{top_k}.json", "w") as f:
+with open(f"term_embeddings_svd_{'task2' if task2 else 'task5'}_{top_k}.json", "w") as f:
     json.dump(word_embeddings, f)
 
 # %%
@@ -103,7 +104,7 @@ with open(f"term_embeddings_svd_{'clubbed' if clubbed else 'non-clubbed'}_{top_k
 # word_list = np.array(word_list)
 
 # %%
-# distances, indices = nn.kneighbors([term_proj[word2ind[w.lower()]] for w in test_words])
+# distances, indices = nn.kneighbors([term_proj[word2ind[w]] for w in test_words])
 
 # for i, w in enumerate(test_words):
 #     print(f"Five words closest to {w}: {word_list[indices[i]]}")
