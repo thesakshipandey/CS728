@@ -1,1 +1,6 @@
 assi_1/updated_vocab_document_dict.json
+assi_1/__pycache__/*
+assi_1/task_1_images/*
+assi_1/embeddings/*
+assi_1/dummy.py
+assi_1/token_ids.json
