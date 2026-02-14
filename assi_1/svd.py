@@ -22,8 +22,12 @@ top_k = 200
 =======
 
 top_k = 100
+<<<<<<< HEAD
 task2 = False  # if true then task 2 otherwise task 5
 >>>>>>> a313022 (Wrong sentence)
+=======
+task2 = True  # if true then task 2 otherwise task 5
+>>>>>>> fc2a4e1 (readme updated and flag corrected)
 
 word2ind = {}
 
