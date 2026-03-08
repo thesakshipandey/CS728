@@ -16,8 +16,14 @@ cols = []   # document indices
 vals = []   # counts
 doc_lenghts = []
 
+<<<<<<< HEAD
 clubbed = False
 top_k = 200
+=======
+
+top_k = 100
+task2 = False  # if true then task 2 otherwise task 5
+>>>>>>> a313022 (Wrong sentence)
 
 word2ind = {}
 
