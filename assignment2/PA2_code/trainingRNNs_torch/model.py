@@ -247,6 +247,8 @@ class GRUModel(nn.Module):
         self.nhid = int(nhid)
         self.init = init
         self.classif_type = classif_type
+        self.dtype = dtype
+        self.device = device
 
         if rng is None:
             rng = np.random.RandomState(1234)
@@ -292,7 +294,7 @@ class GRUModel(nn.Module):
     def recurrent_weight_for_rho(self) -> torch.Tensor:
         # This needs to return the recurrent weight matrix. There are multiple in
         # the case of the GRU: return the candidate one similar to the RNN case.
-        pass
+        return self.W_hh.clone().cpu()
 
     def numpy_state(self) -> dict:
         return {
@@ -324,7 +326,43 @@ class GRUModel(nn.Module):
         #   - "r": pre-activation of reset gate r
         #   - "h_tilde": pre-activation of candidate h_tilde
         # See the math in the assignment PDF for details.
-        raise ValueError(f"Unknown classif_type={self.classif_type}")
+        ht_1 = torch.zeros((B, self.nhid), device=self.device, dtype=self.dtype)
+        uz = u@self.W_uz
+        ur = u@self.W_ur
+        uh = u@self.W_uh
+
+        h = torch.zeros((T, B, self.nhid), device=self.device, dtype=self.dtype)
+        y = torch.zeros((T, B, self.nout), device=self.device, dtype=self.dtype)
+        z_pre_all = torch.zeros((T, B, self.nhid), device=self.device, dtype=self.dtype)
+        r_pre_all = torch.zeros((T, B, self.nhid), device=self.device, dtype=self.dtype)
+        h_tilde_pre_all = torch.zeros((T, B, self.nhid), device=self.device, dtype=self.dtype)
+        for t in range(T):
+            z_pre_all[t, :, :] = uz[t, :, :] + ht_1@self.W_hz + self.b_z
+            r_pre_all[t, :, :] = ur[t, :, :] + ht_1@self.W_hr + self.b_r
+            zt = torch.sigmoid(z_pre_all[t, :, :])
+            rt = torch.sigmoid(r_pre_all[t, :, :])
+            h_tilde_pre_all[t, :, :] = uh[t, :, :] + (rt*ht_1)@self.W_hh + self.b_h
+            ht_tilde = torch.tanh(h_tilde_pre_all[t, :, :])
+            ht = (1-zt)*ht_1 + zt*ht_tilde
+            yt = ht@self.W_hy + self.b_y
+            h[t, :, :] = ht
+            y[t, :, :] = yt
+            ht_1 = ht
+
+        if self.classif_type in ["lastSoftmax", "lastLinear"]:
+            logits = y[-1]
+        elif self.classif_type == "softmax":
+            logits = y.reshape(T * B, self.nout)
+        
+        if return_extras:
+            extras = {
+                "z": z_pre_all,
+                "r": r_pre_all,
+                "h_tilde": h_tilde_pre_all
+            }
+            return logits, h, extras
+
+        return logits, h
 
 
 def make_model(
