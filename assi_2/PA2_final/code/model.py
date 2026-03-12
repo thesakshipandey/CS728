@@ -192,6 +192,8 @@ class GRUModel(nn.Module):
         self.nhid = int(nhid)
         self.init = init
         self.classif_type = classif_type
+        self.dtype = dtype
+        self.device = device
 
         if rng is None:
             rng = np.random.RandomState(1234)
@@ -254,64 +256,79 @@ class GRUModel(nn.Module):
         }
 
     def forward(self, u: torch.Tensor, return_extras: bool = False):
-        """u: (T,B,nin). Returns (logits, h) or (logits, h, extras)."""
+        """u: (T,B,nin). Returns (logits_or_y, h, extras?)."""
         T, B, _ = u.shape
-        h_prev = u.new_zeros((B, self.nhid))
+        print("I am in GRUModel forward")
+        # If lastSoftmax or lastLinear, return only the logits and the last step's output. If softmax, return the logits and
+        # all steps' outputs flattened into (T*B, nout). Final return signature looks like `logits, h`.
+        # Additionally, if return_extras is True, your return signature should be `logits, h, extras` where
+        # extras is a dict containing the gate pre-activations and candidate pre-activation for all steps, stacked into tensors of shape (T, B, nhid):
+        #   - "z": pre-activation of update gate z
+        #   - "r": pre-activation of reset gate r
+        #   - "h_tilde": pre-activation of candidate h_tilde
+        # See the math in the assignment PDF for details.
+        ht_1 = torch.zeros((B, self.nhid), device=self.device, dtype=self.dtype)
+        uz = u@self.W_uz
+        ur = u@self.W_ur
+        uh = u@self.W_uh
 
-        h_seq = []
-        y_seq = []
-
-        if return_extras:
-            z_preact_seq = []
-            r_preact_seq = []
-            htilde_preact_seq = []
+        h_list = []
+        y_list = []
+        z_pre_list = []
+        r_pre_list = []
+        h_tilde_pre_list = []
 
         for t in range(T):
-            u_t = u[t]
 
-            z_preact = u_t @ self.W_uz + h_prev @ self.W_hz + self.b_z
-            r_preact = u_t @ self.W_ur + h_prev @ self.W_hr + self.b_r
+            z_pre = uz[t] + ht_1 @ self.W_hz + self.b_z
+            r_pre = ur[t] + ht_1 @ self.W_hr + self.b_r
 
-            z = torch.sigmoid(z_preact)
-            r = torch.sigmoid(r_preact)
+            zt = torch.sigmoid(z_pre)
+            rt = torch.sigmoid(r_pre)
 
-            htilde_preact = u_t @ self.W_uh + (r * h_prev) @ self.W_hh + self.b_h
-            h_tilde = torch.tanh(htilde_preact)
+            h_tilde_pre = uh[t] + (rt * ht_1) @ self.W_hh + self.b_h
+            ht_tilde = torch.tanh(h_tilde_pre)
 
-            h_t = (1.0 - z) * h_prev + z * h_tilde
-            y_t = h_t @ self.W_hy + self.b_y
+            ht = (1 - zt) * ht_1 + zt * ht_tilde
 
-            h_seq.append(h_t)
-            y_seq.append(y_t)
+            # ht.retain_grad()
+
+            yt = ht @ self.W_hy + self.b_y
+
+            h_list.append(ht)
+            y_list.append(yt)
 
             if return_extras:
-                z_preact_seq.append(z_preact)
-                r_preact_seq.append(r_preact)
-                htilde_preact_seq.append(htilde_preact)
+                z_pre_list.append(z_pre)
+                r_pre_list.append(r_pre)
+                h_tilde_pre_list.append(h_tilde_pre)
 
-            h_prev = h_t
+            ht_1 = ht
 
-        h = torch.stack(h_seq, dim=0)   # (T,B,nhid)
-        y_all = torch.stack(y_seq, dim=0)  # (T,B,nout)
+        h = torch.stack(h_list, dim=0)
+        y = torch.stack(y_list, dim=0)
 
-        if self.classif_type == "softmax":
-            logits = y_all.reshape(T * B, self.nout)
-        elif self.classif_type in {"lastSoftmax", "lastLinear"}:
-            logits = y_all[-1]  # (B,nout)
+        # if h.requires_grad:
+        #     print("h requires grad at end of forward")
+        #     h.retain_grad()
+
+        if self.classif_type in ["lastSoftmax", "lastLinear"]:
+            logits = y[-1]
+        elif self.classif_type == "softmax":
+            logits = y.reshape(T * B, self.nout)
         else:
-            raise ValueError(f"Unknown classif_type={self.classif_type}")
+            raise ValueError(f"Unknown classif_type {self.classif_type}")
 
-        if not return_extras:
-            return logits, h
+        if return_extras:
+            extras = {
+                "z": torch.stack(z_pre_list, dim=0),
+                "r": torch.stack(r_pre_list, dim=0),
+                "h_tilde": torch.stack(h_tilde_pre_list, dim=0),
+            }
+            return logits, h, extras
 
-        extras = {
-            "z": torch.stack(z_preact_seq, dim=0),        # (T,B,nhid)
-            "r": torch.stack(r_preact_seq, dim=0),        # (T,B,nhid)
-            "h_tilde": torch.stack(htilde_preact_seq, dim=0),  # (T,B,nhid)
-        }
-        return logits, h, extras
-
-
+        return logits, h
+    
 def make_model(
     model_type: str,
     nin: int,
