@@ -2,7 +2,7 @@ import json
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os 
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1" # remove this line when downloading fresh
 import numpy as np
 import pandas as pd
 
