@@ -7,7 +7,7 @@ Goal:
 '''
 import gc
 import os
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1" # remove this line when downloading fresh
 import argparse
 import json 
 import time
