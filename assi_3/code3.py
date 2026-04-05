@@ -2,6 +2,7 @@ import torch
 from tqdm import tqdm
 from utils import PromptUtils
 import random 
+import numpy as np
 
 def select_retrieval_heads(train_queries, model, tokenizer, tools, device, max_heads=20):
     # TODO 3: Head selection
@@ -53,9 +54,34 @@ def select_retrieval_heads(train_queries, model, tokenizer, tools, device, max_h
             attentions = model(**inputs).attentions 
 
         # Add your head scoring logic after this line
+        gold_tool_id = map_docname_id[gold_tool_name]
+        q_start = max([end for start, end in item_spans])
+        q_end = len(input_ids)
+
+        for l in range(num_layers):
+            for h in range(num_heads):
+                head_attn = attentions[l][0, h, q_start:q_end, :]
+                head_attn_q = head_attn.sum(dim=0)
+                
+                tool_scores = []
+                for d_start, d_end in item_spans:
+                    score = head_attn_q[d_start:d_end].sum().item()
+                    tool_scores.append(score)
+                
+                ranked_tools = np.argsort(tool_scores)[::-1]
+                if ranked_tools[0] == gold_tool_id:
+                    head_scores[l, h] += 1.0
 
     # TODO: select top heads
     selected_heads = []
+    
+    flat_scores = head_scores.flatten()
+    topk_indices = torch.topk(flat_scores, max_heads).indices
+    
+    for idx in topk_indices:
+        l = (idx // num_heads).item()
+        h = (idx % num_heads).item()
+        selected_heads.append((l, h))
 
     # example expected format:
     # [(layer1, head3), (layer5, head10), ...]
