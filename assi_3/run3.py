@@ -47,16 +47,26 @@ def query_to_docs_attention_heads(attentions, query_span, doc_spans, selected_he
 
     doc_scores = torch.zeros(len(doc_spans), device=attentions[0].device)
 
-    raise NotImplementedError
+    q_start, q_end = query_span
+    
+    for i, (d_start, d_end) in enumerate(doc_spans):
+        score = 0.0
+        for l, h in selected_heads:
+            attn_block = attentions[l][0, h, q_start:q_end, d_start:d_end]
+            score += attn_block.sum().item()
+        doc_scores[i] = score
+        
+    return doc_scores
 
 
-def get_query_span(input_ids, tokenizer):
+def get_query_span(doc_spans, total_length):
     # TODO 3: Query span
     """
     Identify the token span corresponding to the query.
     Note: you are free to add/remove args in this function
     """
-    raise NotImplementedError
+    last_doc_end = max([end for start, end in doc_spans])
+    return (last_doc_end, total_length)
 
 
 parser = argparse.ArgumentParser()
@@ -93,6 +103,7 @@ if __name__ == '__main__':
     print("\n[Phase 2] Evaluating on test set...")
     recall_at_1 = 0
     correct_at_1 = 0
+    correct_at_5 = 0
     total = 0
 
     for qix in tqdm(range(len(test_queries))):
@@ -108,8 +119,8 @@ if __name__ == '__main__':
         random.shuffle(shuffled_keys)
 
         putils = PromptUtils(
-            dataset="toole",
-            model_name=args.model,
+            # dataset="toole",
+            # model_name=args.model,
             tokenizer=tokenizer,
             doc_ids=shuffled_keys,
             dict_all_docs=tools,
@@ -128,7 +139,7 @@ if __name__ == '__main__':
         with torch.no_grad():
             attentions = model(**inputs).attentions
 
-        query_span = get_query_span()
+        query_span = get_query_span(item_spans, len(input_ids))
 
         doc_scores = query_to_docs_attention_heads(
             attentions,
@@ -144,7 +155,14 @@ if __name__ == '__main__':
 
 
         # TODO: measure the recall@1, recall@5
+        if gold_rank == 0:
+            correct_at_1 += 1
+        if gold_rank < 5:
+            correct_at_5 += 1
+            
         total += 1
 
     recall_at_1 = correct_at_1 / total
+    recall_at_5 = correct_at_5 / total
     print(f"\nRecall@1 (selected heads): {recall_at_1:.4f}")
+    print(f"Recall@5 (selected heads): {recall_at_5:.4f}")
